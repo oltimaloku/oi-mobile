@@ -1,64 +1,50 @@
-from flask import Flask, request, jsonify
-import subprocess
+from flask import Flask, jsonify, request
+from flask_socketio import SocketIO, emit
 import pexpect
-import shlex
-from flask_cors import CORS
 import os
 
 app = Flask(__name__)
-CORS(app) 
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-@app.route('/run-command', methods=['POST'])
-def run_command():
-    data = request.json
-    command = data.get("command")
-    
-    if not command:
-        return jsonify({"error": "No command provided"}), 400
-    
-    output = execute_interpreter_command(command)
-    
-    return jsonify({"output": output})
-
-@app.route('/launch-interpreter', methods=['POST'])
-def launch_interpreter():
-    init_interpreter()
-    return jsonify({"message": "Interpreter launched"})
+interpreter_instance = None
 
 def init_interpreter():
-    pexpect.spawn('interpreter -y', encoding='utf-8')
-    print("1 - Spawned interpreter")
+    print("Spawning interpreter...")
+    interpreter = pexpect.spawn('interpreter -y', encoding='utf-8', timeout=10)
+    return interpreter
 
-def execute_interpreter_command(command):
-    # Hardcoded API key
-    openai_api_key = os.getenv('OPENAI_API_KEY')
-    
-    child = pexpect.spawn('interpreter -y', encoding='utf-8')
-    print("1 - Spawned interpreter")
-    
-    # child.expect('OpenAI API key:')  # Wait for the API key prompt
-    # print("2 - API key prompt detected")
-    
-    # child.sendline(openai_api_key)  # Provide the hardcoded API key
-    # print("3 - Sent API key")
-    
-    child.expect('> ', timeout=10)  # Wait for the command prompt
-    print("4 - Command prompt detected")
-    
-    child.sendline(command)  # Send the command
-    print("5 - Command sent")
+@socketio.on('connect')
+def handle_connect():
+    global interpreter_instance
+    print('Client connected')
+    if not interpreter_instance or interpreter_instance.terminated:
+        interpreter_instance = init_interpreter()
+    emit('status', {'msg': 'Interpreter initialized'})
 
-    # After sending the command, we try to capture the next prompt or any other indicator that the command has executed.
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+@socketio.on('run_command')
+def handle_command(data):
+    global interpreter_instance
+    command = data.get('command')
+    if not command:
+        emit('response', {'error': 'No command provided'})
+        return
+    
+    if not interpreter_instance or interpreter_instance.terminated:
+        interpreter_instance = init_interpreter()
+
     try:
-        child.expect('> ', timeout=10) 
-        print("6 - Command execution detected")
-    except pexpect.TIMEOUT:
-        print("6 - Timeout waiting after command execution")
-    
-    print("Response after command execution:")
-    print(child.before) 
-
-    return child.before
+        print(f"Executing command: {command}")
+        interpreter_instance.sendline(command)
+        interpreter_instance.expect('> ')  # Adjust based on your interpreter's prompt
+        response = interpreter_instance.before
+        emit('response', {'output': response})
+    except Exception as e:
+        print(f"Error: {e}")
+        emit('response', {'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8000)

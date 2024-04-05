@@ -6,64 +6,69 @@ import {
   Button,
   StyleSheet,
   Alert,
+  View,
 } from 'react-native';
+import io, {Socket} from 'socket.io-client';
 
 function App(): React.JSX.Element {
   const [text, setText] = useState('');
-
-  const initializeInterpreter = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/launch-interpreter', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      console.log('Response:', response);
-      if (!response.ok) {
-        throw new Error('Initialization failed');
-      }
-      const jsonResponse = await response.json();
-      console.log('Interpreter initialized:', jsonResponse);
-      // Handle successful initialization as needed
-    } catch (error) {
-      console.error('Initialization error:', error);
-      Alert.alert('Error', 'Failed to initialize interpreter');
-    }
-  };
+  const [initStatus, setInitStatus] = useState('Initializing');
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    initializeInterpreter();
-  }, []); // Run only once when component mounts
+    const newSocket = io('http://localhost:8000');
 
-  const handleSubmit = async () => {
-    try {
-      console.log('Sending command: ' + text);
-      const response = await fetch('http://localhost:8000/run-command', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({command: text}),
-      });
-      console.log('Response:', response);
-      const jsonResponse = await response.json();
-      if (response.ok) {
-        Alert.alert(
-          'Success',
-          'Command sent successfully: ' + jsonResponse.output,
-        );
-      } else {
-        Alert.alert('Error', jsonResponse.error || 'Failed to send command');
+    newSocket.on('connect', () => {
+      console.log('Connected to server');
+      setInitStatus('Ready');
+    });
+
+    newSocket.on('status', data => {
+      console.log('Status:', data.msg);
+      if (data.msg === 'Ready') {
+        setInitStatus('Ready');
       }
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'An error occurred while sending the command');
+    });
+
+    newSocket.on('response', data => {
+      if (data.error) {
+        Alert.alert('Error', data.error);
+      } else {
+        Alert.alert('Success', 'command executed: ' + data.output);
+      }
+    });
+
+    setSocket(newSocket);
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  const handleSubmit = () => {
+    if (socket) {
+      console.log('Sending command via WebSocket:', text);
+      socket.emit('run_command', {command: text});
+    } else {
+      Alert.alert('Error', 'Socket is not connected.');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={{flexDirection: 'row', alignItems: 'center'}}>
+        <Text style={{marginLeft: 10}}>Interpreter Status: </Text>
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <Text>{initStatus}</Text>
+          <View
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: initStatus === 'Ready' ? 'green' : 'red',
+            }}
+          />
+        </View>
+      </View>
       <TextInput
         style={styles.input}
         onChangeText={setText}
