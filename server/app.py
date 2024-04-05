@@ -16,8 +16,6 @@ def run_command():
     if not command:
         return jsonify({"error": "No command provided"}), 400
     
-    # Here, add the logic to interact with your interpreter shell
-    # This is a placeholder for where you'd add your specific logic
     output = execute_interpreter_command(command)
     
     return jsonify({"output": output})
@@ -28,7 +26,7 @@ def launch_interpreter():
     return jsonify({"message": "Interpreter launched"})
 
 def init_interpreter():
-    child = pexpect.spawn('interpreter -y', encoding='utf-8')
+    pexpect.spawn('interpreter -y', encoding='utf-8')
     print("1 - Spawned interpreter")
 
 def execute_interpreter_command(command):

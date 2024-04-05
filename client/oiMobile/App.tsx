@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   SafeAreaView,
   Text,
@@ -10,6 +10,31 @@ import {
 
 function App(): React.JSX.Element {
   const [text, setText] = useState('');
+
+  const initializeInterpreter = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/launch-interpreter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      console.log('Response:', response);
+      if (!response.ok) {
+        throw new Error('Initialization failed');
+      }
+      const jsonResponse = await response.json();
+      console.log('Interpreter initialized:', jsonResponse);
+      // Handle successful initialization as needed
+    } catch (error) {
+      console.error('Initialization error:', error);
+      Alert.alert('Error', 'Failed to initialize interpreter');
+    }
+  };
+
+  useEffect(() => {
+    initializeInterpreter();
+  }, []); // Run only once when component mounts
 
   const handleSubmit = async () => {
     try {
