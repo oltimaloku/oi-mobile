@@ -39,7 +39,7 @@ def handle_command(data):
     try:
         print(f"Executing command: {command}")
         interpreter_instance.sendline(command)
-        interpreter_instance.expect('> ')  # Adjust based on your interpreter's prompt
+        interpreter_instance.expect('> ')  
         response = interpreter_instance.before
         emit('response', {'output': response})
     except Exception as e:
